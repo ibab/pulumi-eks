@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import * as aws from "@pulumi/aws";
+import { SecurityGroup } from "@pulumi/aws/ec2";
 import * as awsInputs from "@pulumi/aws/types/input";
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
@@ -665,9 +666,11 @@ function createNodeGroupInternal(
         .apply(([id]) => id);
 
     // Collect the IDs of any extra, user-specific security groups.
-    const extraNodeSecurityGroupIds = args.extraNodeSecurityGroups
-        ? args.extraNodeSecurityGroups.map((sg) => sg.id)
+    const extraNodeSecurityGroupIds = pulumi.output(args.extraNodeSecurityGroups).apply((sgs) => {
+        return sgs
+        ? sgs.map((sg) => sg.id)
         : [];
+    });
 
     // If requested, add a new EC2 KeyPair for SSH access to the instances.
     let keyName = args.keyName;
@@ -802,7 +805,7 @@ ${customUserData}
             instanceType: args.instanceType || "t2.medium",
             iamInstanceProfile: instanceProfile,
             keyName: keyName,
-            securityGroups: [nodeSecurityGroupId, ...extraNodeSecurityGroupIds],
+            securityGroups: extraNodeSecurityGroupIds.apply((sgs) => [nodeSecurityGroupId, ...sgs]),
             spotPrice: args.spotPrice,
             rootBlockDevice: {
                 encrypted:
@@ -1049,12 +1052,9 @@ function createNodeGroupV2Internal(
         .apply(([id]) => id);
 
     // Collect the IDs of any extra, user-specific security groups.
-    const extraNodeSecurityGroupIds = args.extraNodeSecurityGroups
-        ? args.extraNodeSecurityGroups.map((sg) => sg.id)
-        : [];
-    const extraNodeSecurityGroupNames = args.extraNodeSecurityGroups
-        ? args.extraNodeSecurityGroups.map((sg) => sg.name)
-        : [];
+    const extraNodeSecurityGroupIds = pulumi.output(args.extraNodeSecurityGroups).apply((sgs) => {
+        return sgs ? sgs.map((sg) => sg.id) : [];
+    });
 
     // If requested, add a new EC2 KeyPair for SSH access to the instances.
     let keyName = args.keyName;
@@ -1239,7 +1239,7 @@ ${customUserData}
             networkInterfaces: [
                 {
                     associatePublicIpAddress: String(nodeAssociatePublicIpAddress),
-                    securityGroups: [nodeSecurityGroupId, ...extraNodeSecurityGroupIds],
+                    securityGroups: extraNodeSecurityGroupIds.apply((sgs) => [nodeSecurityGroupId, ...sgs]),
                 },
             ],
             metadataOptions: args.metadataOptions,
